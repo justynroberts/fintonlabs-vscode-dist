@@ -1,0 +1,135 @@
+{
+  "name": "fintonlabs",
+  "displayName": "Fintonlabs",
+  "description": "AI-powered agentic code generation for building complete applications",
+  "version": "0.1.0",
+  "publisher": "fintonlabs",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:fintonlabs.createApp",
+    "onCommand:fintonlabs.updateApp",
+    "onCommand:fintonlabs.undo",
+    "onCommand:fintonlabs.generateComponent",
+    "onCommand:fintonlabs.generateFunction"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "fintonlabs.createApp",
+        "title": "Fintonlabs: Create New Application"
+      },
+      {
+        "command": "fintonlabs.updateApp",
+        "title": "Fintonlabs: Update Existing Application"
+      },
+      {
+        "command": "fintonlabs.undo",
+        "title": "Fintonlabs: Undo Last Operation"
+      },
+      {
+        "command": "fintonlabs.generateComponent",
+        "title": "Fintonlabs: Generate Component"
+      },
+      {
+        "command": "fintonlabs.generateFunction",
+        "title": "Fintonlabs: Generate Function"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "fintonlabs.createApp",
+          "group": "fintonlabs"
+        },
+        {
+          "command": "fintonlabs.updateApp",
+          "group": "fintonlabs",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "fintonlabs.generateFunction",
+          "group": "fintonlabs"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "fintonlabs.createApp"
+        },
+        {
+          "command": "fintonlabs.updateApp"
+        },
+        {
+          "command": "fintonlabs.undo"
+        },
+        {
+          "command": "fintonlabs.generateComponent"
+        },
+        {
+          "command": "fintonlabs.generateFunction"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Fintonlabs",
+      "properties": {
+        "fintonlabs.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for the AI code generation service"
+        },
+        "fintonlabs.model": {
+          "type": "string",
+          "enum": [
+            "gpt-4",
+            "claude-3-opus",
+            "claude-3-sonnet",
+            "gemini-pro"
+          ],
+          "default": "gpt-4",
+          "description": "AI model to use for code generation"
+        },
+        "fintonlabs.maxTokens": {
+          "type": "number",
+          "default": 8192,
+          "description": "Maximum number of tokens per API request"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "test-compile": "tsc -p ./",
+    "test-watch": "tsc -watch -p ./",
+    "pretest": "npm run test-compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.7",
+    "@types/vscode": "^1.60.0",
+    "@typescript-eslint/eslint-plugin": "^5.30.0",
+    "@typescript-eslint/parser": "^5.30.0",
+    "eslint": "^8.18.0",
+    "ts-loader": "^9.3.1",
+    "typescript": "^4.7.4",
+    "webpack": "^5.73.0",
+    "webpack-cli": "^4.10.0"
+  },
+  "dependencies": {
+    "axios": "^0.27.2",
+    "openai": "^4.0.0"
+  }
+}

@@ -1,0 +1,208 @@
+/* media/style.css - Fintonlabs WebView Styles */
+
+:root {
+  --container-padding: 20px;
+  --input-padding-vertical: 6px;
+  --input-padding-horizontal: 8px;
+  --input-margin-vertical: 4px;
+  --input-margin-horizontal: 0;
+  --fintonlabs-primary: #3498db;
+  --fintonlabs-secondary: #2980b9;
+  --fintonlabs-accent: #e74c3c;
+  --fintonlabs-light: #ecf0f1;
+  --fintonlabs-dark: #2c3e50;
+}
+
+body {
+  padding: 0;
+  color: var(--vscode-foreground);
+  font-size: var(--vscode-font-size);
+  font-weight: var(--vscode-font-weight);
+  font-family: var(--vscode-font-family);
+  background-color: var(--vscode-editor-background);
+}
+
+.container {
+  padding: var(--container-padding);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.logo {
+  height: 40px;
+  margin-right: 10px;
+}
+
+h1 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: var(--vscode-editor-foreground);
+  font-weight: 600;
+}
+
+.card {
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.form-control {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--input-padding-vertical) var(--input-padding-horizontal);
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  transition: border-color 0.2s ease;
+}
+
+.form-control:focus {
+  border-color: var(--fintonlabs-primary);
+  outline: none;
+}
+
+select.form-control {
+  height: 32px;
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.select-wrapper {
+  position: relative;
+}
+
+.select-wrapper::after {
+  content: "▼";
+  font-size: 0.8em;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.location-picker {
+  display: flex;
+  gap: 10px;
+}
+
+.location-picker .form-control {
+  flex: 1;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--fintonlabs-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--fintonlabs-secondary);
+}
+
+.btn-secondary {
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+.error-message {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-left: 4px solid var(--fintonlabs-accent);
+  padding: 10px 15px;
+  margin-bottom: 20px;
+  border-radius: 0 4px 4px 0;
+  font-weight: 500;
+}
+
+.progress-container {
+  margin: 20px 0;
+  padding: 15px;
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.progress-bar {
+  height: 6px;
+  background-color: rgba(52, 152, 219, 0.2);
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+.progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 33%;
+  background-color: var(--fintonlabs-primary);
+  border-radius: 3px;
+}
+
+.progress-animate {
+  animation: progress-animation 2s infinite linear;
+}
+
+.progress-text {
+  font-size: 0.9em;
+  color: var(--vscode-descriptionForeground);
+}
+
+@keyframes progress-animation {
+  0% {
+    left: -33%;
+  }
+  100% {
+    left: 100%;
+  }
+}
