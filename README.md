@@ -1,4 +1,4 @@
-# Fintonlabs - VSCode Extension for Agentic Code Generation
+# Fintonlabs - VSCode Extension for Code Generation
 
 Fintonlabs is a powerful VS Code extension that uses AI to generate complete applications, components, and functions based on natural language descriptions. It supports multiple programming languages and frameworks, allowing you to rapidly create new projects or update existing ones.
 
