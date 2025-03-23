@@ -291,9 +291,22 @@ export class CodeGeneratorPanel {
                                     <option value="next">Next.js</option>
                                 </optgroup>
                                 <optgroup label="Python">
+                                    <option value="python-native">Native Python</option>
                                     <option value="fastapi">FastAPI</option>
                                     <option value="django">Django</option>
                                     <option value="flask">Flask</option>
+                                </optgroup>
+                                <optgroup label="Infrastructure as Code">
+                                    <option value="terraform">Terraform</option>
+                                    <option value="ansible">Ansible</option>
+                                </optgroup>
+                                <optgroup label="Database">
+                                    <option value="sql-mysql">MySQL</option>
+                                    <option value="sql-postgres">PostgreSQL</option>
+                                    <option value="sql-sqlite">SQLite</option>
+                                </optgroup>
+                                <optgroup label="Shell">
+                                    <option value="bash">Bash Script</option>
                                 </optgroup>
                                 <optgroup label="Java">
                                     <option value="spring">Spring Boot</option>

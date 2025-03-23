@@ -198,7 +198,11 @@ export class AICodeGeneratorService {
                 'java': 'java',
                 'csharp': 'c#',
                 'go': 'go',
-                'rust': 'rust'
+                'rust': 'rust',
+                'shellscript': 'bash',
+                'terraform': 'terraform',
+                'sql': 'sql',
+                'yaml': 'yaml'
             };
             
             const mappedLanguage = languageMap[language] || language;
@@ -230,7 +234,7 @@ export class AICodeGeneratorService {
         } else {
             // Use the original approach for smaller projects
             const config = vscode.workspace.getConfiguration('fintonlabs');
-            const model = config.get<string>('model') || 'gpt-4';
+            const model = config.get<string>('model') || 'gpt-4-turbo';
             const maxTokens = config.get<number>('maxTokens') || 4096;
             
             const prompt = `
@@ -262,7 +266,7 @@ export class AICodeGeneratorService {
             try {
                 if (this._openai) {
                     const completion = await this._openai.chat.completions.create({
-                        model: model === 'gpt-4' ? 'gpt-4' : 'gpt-3.5-turbo',
+                        model: model,
                         messages: [{ role: 'user', content: prompt }],
                         temperature: 0.7,
                         max_tokens: maxTokens
@@ -333,519 +337,635 @@ export class AICodeGeneratorService {
                     projectType = 'backend';
                 }
             }
-            
-            // Scan for important files to include in analysis
-            const filesToAnalyze = [
-                'package.json',
-                'tsconfig.json',
-                'src/index.js',
-                'src/index.ts',
-                'src/App.js',
-                'src/App.tsx',
-                'src/main.js',
-                'src/main.ts'
-            ];
-            
-            const fileContents: Record<string, string> = {};
-            
-            for (const file of filesToAnalyze) {
-                const filePath = path.join(projectPath, file);
-                if (await this._fileSystemService.fileExists(filePath)) {
-                    fileContents[file] = await this._fileSystemService.readFile(filePath);
-                }
-            }
-            
-            // Get directory structure
-            const directoryStructure = await this._scanDirectory(projectPath);
-            
-            return {
-                projectType,
-                framework,
-                packageJson,
-                fileContents,
-                directoryStructure
-            };
-        } catch (error) {
-            console.error('Error analyzing existing project:', error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(`Failed to analyze existing project: ${errorMessage}`);
-        }
-    }
-    
-    /**
-     * Scans a directory and returns its structure
-     */
-    private async _scanDirectory(dirPath: string, maxDepth: number = 3, currentDepth: number = 0): Promise<string[]> {
-        if (currentDepth >= maxDepth) {
-            return [];
-        }
-        
-        try {
-            const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dirPath));
-            let files: string[] = [];
-            
-            for (const [name, type] of entries) {
-                const fullPath = path.join(dirPath, name);
-                const relativePath = path.relative(dirPath, fullPath);
-                
-                // Skip node_modules and other large generated directories
-                if (['node_modules', 'dist', 'build', '.git'].includes(name)) {
-                    continue;
-                }
-                
-                if (type === vscode.FileType.Directory) {
-                    files.push(`${relativePath}/`);
-                    const subDirFiles = await this._scanDirectory(fullPath, maxDepth, currentDepth + 1);
-                    files = files.concat(subDirFiles.map(f => path.join(relativePath, f)));
-                } else {
-                    files.push(relativePath);
-                }
-            }
-            
-            return files;
-        } catch (error) {
-            console.error(`Error scanning directory ${dirPath}:`, error);
-            return [];
-        }
-    }
-    
-    /**
-     * Generates an update plan for an existing project
-     */
-    private async _generateUpdatePlan(projectAnalysis: ProjectAnalysis, newRequirements: string): Promise<UpdatePlan> {
-        const config = vscode.workspace.getConfiguration('fintonlabs');
-        const model = config.get<string>('model') || 'gpt-4';
-        const maxTokens = config.get<number>('maxTokens') || 4096;
-        
-        // Prepare project analysis for prompt
-        const analysisJson = JSON.stringify({
-            projectType: projectAnalysis.projectType,
-            framework: projectAnalysis.framework,
-            packageJson: projectAnalysis.packageJson,
-            fileContents: projectAnalysis.fileContents,
-            directoryStructure: projectAnalysis.directoryStructure
-        }, null, 2);
-        
-        const prompt = `
-        Analyze this existing project structure:
-        
-        ${analysisJson}
-        
-        I need to update the project to implement these new requirements:
-        
-        ${newRequirements}
-        
-        Generate an update plan that creates, modifies, or deletes files to implement these requirements.
-        Respond with a valid JSON object that matches this structure:
-        {
-            "files": [
-                {
-                    "path": "relative/path/to/file.ext",
-                    "action": "create" | "update" | "delete",
-                    "content": "complete file content" // only for create or update
-                }
-                // more files...
-            ]
-        }
-        
-        Focus on creating a minimal set of changes that will successfully implement the requirements.
-        `;
-        
-        try {
-            if (this._openai) {
-                const completion = await this._openai.chat.completions.create({
-                    model: model === 'gpt-4' ? 'gpt-4' : 'gpt-3.5-turbo',
-                    messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.7,
-                    max_tokens: maxTokens
-                });
-                
-                const responseContent = completion.choices[0].message.content;
-                if (responseContent) {
-                    try {
-                        // Extract JSON from the response
-                        const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/) || 
-                                        responseContent.match(/```\n([\s\S]*?)\n```/) || 
-                                        [null, responseContent];
-                        
-                        const jsonContent = jsonMatch[1] ? jsonMatch[1].trim() : responseContent.trim();
-                        return JSON.parse(jsonContent);
-                    } catch (parseError) {
-                        console.error('Error parsing AI response:', parseError);
-                        throw new Error('Failed to parse AI response. The response was not valid JSON.');
-                    }
-                }
-            }
-            
-            throw new Error('Failed to generate update plan. API not initialized.');
-        } catch (error) {
-            console.error('Error calling AI API:', error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(`Error calling AI API: ${errorMessage}`);
-        }
-    }
-    
-    /**
-     * Generates component code using AI
-     */
-    private async _generateComponentCode(description: string, framework: string, language: string): Promise<string> {
-        const config = vscode.workspace.getConfiguration('fintonlabs');
-        const model = config.get<string>('model') || 'gpt-4';
-        const maxTokens = config.get<number>('maxTokens') || 4096;
-        
-        const prompt = `
-        Generate a ${framework} component based on this description:
-        
-        ${description}
-        
-        The component should be implemented in ${language}.
-        
-        Create a complete, working component with all necessary imports, props, state, and handlers.
-        Include comprehensive comments to explain the implementation.
-        `;
-        
-        try {
-            if (this._openai) {
-                const completion = await this._openai.chat.completions.create({
-                    model: model === 'gpt-4' ? 'gpt-4' : 'gpt-3.5-turbo',
-                    messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.7,
-                    max_tokens: maxTokens
-                });
-                
-                const responseContent = completion.choices[0].message.content;
-                if (responseContent) {
-                    // Extract code from the response
-                    const codeMatch = responseContent.match(/```(?:\w+)?\n([\s\S]*?)\n```/) || [null, responseContent];
-                    return codeMatch[1] ? codeMatch[1].trim() : responseContent.trim();
-                }
-            }
-            
-            throw new Error('Failed to generate component code. API not initialized.');
-        } catch (error) {
-            console.error('Error calling AI API:', error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(`Error calling AI API: ${errorMessage}`);
-        }
-    }
-    
-    /**
-     * Generates function code using AI
-     */
-    private async _generateFunctionCode(description: string, language: string): Promise<string> {
-        const config = vscode.workspace.getConfiguration('fintonlabs');
-        const model = config.get<string>('model') || 'gpt-4';
-        const maxTokens = config.get<number>('maxTokens') || 4096;
-        
-        const prompt = `
-        Generate a function in ${language} based on this description:
-        
-        ${description}
-        
-        Create a complete, well-documented function with proper error handling and edge case coverage.
-        Include comprehensive comments to explain the implementation.
-        `;
-        
-        try {
-            if (this._openai) {
-                const completion = await this._openai.chat.completions.create({
-                    model: model === 'gpt-4' ? 'gpt-4' : 'gpt-3.5-turbo',
-                    messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.7,
-                    max_tokens: maxTokens
-                });
-                
-                const responseContent = completion.choices[0].message.content;
-                if (responseContent) {
-                    // Extract code from the response
-                    const codeMatch = responseContent.match(/```(?:\w+)?\n([\s\S]*?)\n```/) || [null, responseContent];
-                    return codeMatch[1] ? codeMatch[1].trim() : responseContent.trim();
-                }
-            }
-            
-            throw new Error('Failed to generate function code. API not initialized.');
-        } catch (error) {
-            console.error('Error calling AI API:', error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(`Error calling AI API: ${errorMessage}`);
-        }
-    }
+// Check for Python project indicators
+const requirementsPath = path.join(projectPath, 'requirements.txt');
+const hasRequirements = await this._fileSystemService.fileExists(requirementsPath);
+const setupPyPath = path.join(projectPath, 'setup.py');
+const hasSetupPy = await this._fileSystemService.fileExists(setupPyPath);
 
-    /**
-     * Get framework details based on framework ID
-     */
-    private _getFrameworkDetails(framework: string): FrameworkInfo {
-        const frameworks: Record<string, FrameworkInfo> = {
-            // JavaScript/TypeScript
-            'react': {
-                name: 'React',
-                language: 'JavaScript/TypeScript',
-                type: 'frontend',
-                dependencies: ['react', 'react-dom', 'react-scripts']
-            },
-            'vue': {
-                name: 'Vue.js',
-                language: 'JavaScript/TypeScript',
-                type: 'frontend',
-                dependencies: ['vue', 'vue-router', 'vuex']
-            },
-            'angular': {
-                name: 'Angular',
-                language: 'TypeScript',
-                type: 'frontend',
-                dependencies: ['@angular/core', '@angular/common', '@angular/router']
-            },
-            'express': {
-                name: 'Express.js',
-                language: 'JavaScript/TypeScript',
-                type: 'backend',
-                dependencies: ['express', 'body-parser', 'mongoose']
-            },
-            'next': {
-                name: 'Next.js',
-                language: 'JavaScript/TypeScript',
-                type: 'fullstack',
-                dependencies: ['next', 'react', 'react-dom']
-            },
-            
-            // Python
-            'fastapi': {
-                name: 'FastAPI',
-                language: 'Python',
-                type: 'backend',
-                dependencies: ['fastapi', 'uvicorn', 'pydantic']
-            },
-            'django': {
-                name: 'Django',
-                language: 'Python',
-                type: 'fullstack',
-                dependencies: ['django', 'djangorestframework', 'django-cors-headers']
-            },
-            'flask': {
-                name: 'Flask',
-                language: 'Python',
-                type: 'backend',
-                dependencies: ['flask', 'flask-sqlalchemy', 'flask-migrate']
-            },
-            
-            // Java
-            'spring': {
-                name: 'Spring Boot',
-                language: 'Java',
-                type: 'backend',
-                dependencies: ['spring-boot-starter-web', 'spring-boot-starter-data-jpa', 'spring-boot-starter-security']
-            },
-            'android': {
-                name: 'Android App',
-                language: 'Java/Kotlin',
-                type: 'mobile',
-                dependencies: ['androidx.core:core-ktx', 'androidx.appcompat:appcompat', 'com.google.android.material:material']
-            },
-            
-            // C#
-            'aspnet': {
-                name: 'ASP.NET Core',
-                language: 'C#',
-                type: 'backend',
-                dependencies: ['Microsoft.AspNetCore.App', 'Microsoft.EntityFrameworkCore', 'Newtonsoft.Json']
-            },
-            'wpf': {
-                name: 'WPF Desktop App',
-                language: 'C#',
-                type: 'desktop',
-                dependencies: ['Microsoft.Extensions.DependencyInjection', 'MaterialDesignThemes']
-            },
-            
-            // Go
-            'golang-web': {
-                name: 'Go Web Server',
-                language: 'Go',
-                type: 'backend',
-                dependencies: ['github.com/gin-gonic/gin', 'github.com/go-sql-driver/mysql', 'github.com/golang-jwt/jwt']
-            },
-            'golang-cli': {
-                name: 'Go CLI Application',
-                language: 'Go',
-                type: 'cli',
-                dependencies: ['github.com/spf13/cobra', 'github.com/spf13/viper', 'github.com/sirupsen/logrus']
-            },
-            
-            // Ruby
-            'rails': {
-                name: 'Ruby on Rails',
-                language: 'Ruby',
-                type: 'fullstack',
-                dependencies: ['rails', 'pg', 'devise']
-            },
-            
-            // PHP
-            'laravel': {
-                name: 'Laravel',
-                language: 'PHP',
-                type: 'fullstack',
-                dependencies: ['laravel/framework', 'laravel/sanctum', 'laravel/tinker']
-            },
-            
-            // Rust
-            'rust-web': {
-                name: 'Rust Web Service',
-                language: 'Rust',
-                type: 'backend',
-                dependencies: ['actix-web', 'tokio', 'serde']
-            },
-            'rust-cli': {
-                name: 'Rust CLI Tool',
-                language: 'Rust',
-                type: 'cli',
-                dependencies: ['clap', 'serde', 'tokio']
-            }
-        };
-        
-        return frameworks[framework] || {
-            name: framework,
-            language: 'Unknown',
-            type: 'unknown',
-            dependencies: []
-        };
+if (hasRequirements || hasSetupPy) {
+    projectType = 'backend';
+    // Check for specific Python frameworks
+    const filePaths = await this._scanDirectory(projectPath);
+    if (filePaths.some(f => f.includes('fastapi'))) {
+        framework = 'fastapi';
+    } else if (filePaths.some(f => f.includes('django'))) {
+        framework = 'django';
+    } else if (filePaths.some(f => f.includes('flask'))) {
+        framework = 'flask';
+    } else {
+        framework = 'python-native';
     }
+}
 
-    /**
-     * Method to split large prompts into manageable chunks
-     */
-    private async _generateLargerProject(description: string, framework: string): Promise<ProjectStructure> {
-        // First, determine the project structure without full file content
-        const structurePrompt = `
-        Based on this description: "${description}"
-        
-        Generate a structure for a ${framework} application.
-        Return ONLY a JSON array of file paths that would be included in this project.
-        Example: ["package.json", "src/index.js", "src/components/App.js"]
-        
-        Do not include file content, just the paths.
-        `;
-        
-        // Get the structure first
-        const structureResponse = await this._callAI(structurePrompt, 2048);
-        let filePaths: string[] = [];
-        
-        try {
-            // Parse the response to get file paths
-            const pathMatch = structureResponse.match(/\[([\s\S]*?)\]/);
-            if (pathMatch) {
-                const pathJson = `[${pathMatch[1]}]`;
-                filePaths = JSON.parse(pathJson);
-            }
-        } catch (error) {
-            console.error('Error parsing structure response:', error);
-            throw new Error('Failed to generate project structure');
-        }
-        
-        // Now generate content for each file separately
-        const files: {path: string, content: string}[] = [];
-        const frameworkDetails = this._getFrameworkDetails(framework);
-        
-        for (const filePath of filePaths) {
-            const filePrompt = `
-            Generate code for a ${filePath} file in a ${frameworkDetails.name} project.
-            
-            Project description: ${description}
-            
-            I need the complete content for this specific file. Focus only on this file.
-            Context: This is part of a ${frameworkDetails.name} application written in ${frameworkDetails.language}.
-            `;
-            
-            try {
-                const fileContent = await this._callAI(filePrompt, 2048);
-                
-                // Clean up the response to extract just the code
-                const codeMatch = fileContent.match(/```(?:\w+)?\n([\s\S]*?)\n```/) || [null, fileContent];
-                const cleanedContent = codeMatch[1] ? codeMatch[1].trim() : fileContent.trim();
-                
-                files.push({
-                    path: filePath,
-                    content: cleanedContent
-                });
-            } catch (error) {
-                console.error(`Error generating content for ${filePath}:`, error);
-                files.push({
-                    path: filePath,
-                    content: `// Failed to generate content for this file: ${error}`
-                });
-            }
-        }
-        
-        return { files };
-    }
+// Check for infrastructure as code
+const terraformFiles = await this._findFiles(projectPath, '**/*.tf');
+if (terraformFiles.length > 0) {
+    projectType = 'infrastructure';
+    framework = 'terraform';
+}
 
-    /**
-     * Helper method for AI calls
-     */
-    private async _callAI(prompt: string, maxTokens: number): Promise<string> {
-        const config = vscode.workspace.getConfiguration('fintonlabs');
-        const model = config.get<string>('model') || 'gpt-4';
-        
+const ansibleFiles = await this._findFiles(projectPath, '**/*.yml');
+if (ansibleFiles.length > 0 && ansibleFiles.some(f => f.includes('playbook') || f.includes('ansible'))) {
+    projectType = 'configuration';
+    framework = 'ansible';
+}
+
+// Check for SQL files
+const sqlFiles = await this._findFiles(projectPath, '**/*.sql');
+if (sqlFiles.length > 0) {
+    projectType = 'database';
+    framework = 'sql';
+}
+
+// Check for shell scripts
+const bashFiles = await this._findFiles(projectPath, '**/*.sh');
+if (bashFiles.length > 0) {
+    projectType = 'script';
+    framework = 'bash';
+}
+
+// Scan for important files to include in analysis
+const filesToAnalyze = [
+    'package.json',
+    'tsconfig.json',
+    'requirements.txt',
+    'setup.py',
+    'main.tf',
+    'playbook.yml',
+    'src/index.js',
+    'src/index.ts',
+    'src/App.js',
+    'src/App.tsx',
+    'src/main.py',
+    'src/main.rs',
+    'src/main.go'
+];
+
+const fileContents: Record<string, string> = {};
+
+for (const file of filesToAnalyze) {
+    const filePath = path.join(projectPath, file);
+    if (await this._fileSystemService.fileExists(filePath)) {
+        fileContents[file] = await this._fileSystemService.readFile(filePath);
+    }
+}
+
+// Get directory structure
+const directoryStructure = await this._scanDirectory(projectPath);
+
+return {
+    projectType,
+    framework,
+    packageJson,
+    fileContents,
+    directoryStructure
+};
+} catch (error) {
+console.error('Error analyzing existing project:', error);
+const errorMessage = error instanceof Error ? error.message : String(error);
+throw new Error(`Failed to analyze existing project: ${errorMessage}`);
+}
+}
+
+/**
+* Helper method to find files matching a pattern
+*/
+private async _findFiles(dirPath: string, pattern: string): Promise<string[]> {
+try {
+const files = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(dirPath, pattern),
+    '**/node_modules/**'
+);
+return files.map(f => f.fsPath);
+} catch (error) {
+console.error(`Error finding files with pattern ${pattern}:`, error);
+return [];
+}
+}
+
+/**
+* Scans a directory and returns its structure
+*/
+private async _scanDirectory(dirPath: string, maxDepth: number = 3, currentDepth: number = 0): Promise<string[]> {
+if (currentDepth >= maxDepth) {
+return [];
+}
+
+try {
+const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dirPath));
+let files: string[] = [];
+
+for (const [name, type] of entries) {
+    const fullPath = path.join(dirPath, name);
+    const relativePath = path.relative(dirPath, fullPath);
+    
+    // Skip node_modules and other large generated directories
+    if (['node_modules', 'dist', 'build', '.git', '__pycache__', 'venv', 'env', '.terraform'].includes(name)) {
+        continue;
+    }
+    
+    if (type === vscode.FileType.Directory) {
+        files.push(`${relativePath}/`);
+        const subDirFiles = await this._scanDirectory(fullPath, maxDepth, currentDepth + 1);
+        files = files.concat(subDirFiles.map(f => path.join(relativePath, f)));
+    } else {
+        files.push(relativePath);
+    }
+}
+
+return files;
+} catch (error) {
+console.error(`Error scanning directory ${dirPath}:`, error);
+return [];
+}
+}
+
+/**
+* Generates an update plan for an existing project
+*/
+private async _generateUpdatePlan(projectAnalysis: ProjectAnalysis, newRequirements: string): Promise<UpdatePlan> {
+const config = vscode.workspace.getConfiguration('fintonlabs');
+const model = config.get<string>('model') || 'gpt-4-turbo';
+const maxTokens = config.get<number>('maxTokens') || 4096;
+
+// Prepare project analysis for prompt
+const analysisJson = JSON.stringify({
+projectType: projectAnalysis.projectType,
+framework: projectAnalysis.framework,
+packageJson: projectAnalysis.packageJson,
+fileContents: projectAnalysis.fileContents,
+directoryStructure: projectAnalysis.directoryStructure
+}, null, 2);
+
+const prompt = `
+Analyze this existing project structure:
+
+${analysisJson}
+
+I need to update the project to implement these new requirements:
+
+${newRequirements}
+
+Generate an update plan that creates, modifies, or deletes files to implement these requirements.
+Respond with a valid JSON object that matches this structure:
+{
+"files": [
+    {
+        "path": "relative/path/to/file.ext",
+        "action": "create" | "update" | "delete",
+        "content": "complete file content" // only for create or update
+    }
+    // more files...
+]
+}
+
+Focus on creating a minimal set of changes that will successfully implement the requirements.
+`;
+
+try {
+if (this._openai) {
+    const completion = await this._openai.chat.completions.create({
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: maxTokens
+    });
+    
+    const responseContent = completion.choices[0].message.content;
+    if (responseContent) {
         try {
-            if (this._openai) {
-                const completion = await this._openai.chat.completions.create({
-                    model: model === 'gpt-4' ? 'gpt-4' : 'gpt-3.5-turbo',
-                    messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.7,
-                    max_tokens: maxTokens
-                });
-                
-                return completion.choices[0].message.content || '';
-            }
+            // Extract JSON from the response
+            const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/) || 
+                            responseContent.match(/```\n([\s\S]*?)\n```/) || 
+                            [null, responseContent];
             
-            throw new Error('OpenAI client not initialized');
-        } catch (error) {
-            console.error('Error calling AI API:', error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(`Error calling AI API: ${errorMessage}`);
+            const jsonContent = jsonMatch[1] ? jsonMatch[1].trim() : responseContent.trim();
+            return JSON.parse(jsonContent);
+        } catch (parseError) {
+            console.error('Error parsing AI response:', parseError);
+            throw new Error('Failed to parse AI response. The response was not valid JSON.');
         }
     }
+}
+
+throw new Error('Failed to generate update plan. API not initialized.');
+} catch (error) {
+console.error('Error calling AI API:', error);
+const errorMessage = error instanceof Error ? error.message : String(error);
+throw new Error(`Error calling AI API: ${errorMessage}`);
+}
+}
+
+/**
+* Generates component code using AI
+*/
+private async _generateComponentCode(description: string, framework: string, language: string): Promise<string> {
+const config = vscode.workspace.getConfiguration('fintonlabs');
+const model = config.get<string>('model') || 'gpt-4-turbo';
+const maxTokens = config.get<number>('maxTokens') || 4096;
+
+const prompt = `
+Generate a ${framework} component based on this description:
+
+${description}
+
+The component should be implemented in ${language}.
+
+Create a complete, working component with all necessary imports, props, state, and handlers.
+Include comprehensive comments to explain the implementation.
+`;
+
+try {
+if (this._openai) {
+    const completion = await this._openai.chat.completions.create({
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: maxTokens
+    });
+    
+    const responseContent = completion.choices[0].message.content;
+    if (responseContent) {
+        // Extract code from the response
+        const codeMatch = responseContent.match(/```(?:\w+)?\n([\s\S]*?)\n```/) || [null, responseContent];
+        return codeMatch[1] ? codeMatch[1].trim() : responseContent.trim();
+    }
+}
+
+throw new Error('Failed to generate component code. API not initialized.');
+} catch (error) {
+console.error('Error calling AI API:', error);
+const errorMessage = error instanceof Error ? error.message : String(error);
+throw new Error(`Error calling AI API: ${errorMessage}`);
+}
+}
+
+/**
+* Generates function code using AI
+*/
+private async _generateFunctionCode(description: string, language: string): Promise<string> {
+const config = vscode.workspace.getConfiguration('fintonlabs');
+const model = config.get<string>('model') || 'gpt-4-turbo';
+const maxTokens = config.get<number>('maxTokens') || 4096;
+
+const prompt = `
+Generate a function in ${language} based on this description:
+
+${description}
+
+Create a complete, well-documented function with proper error handling and edge case coverage.
+Include comprehensive comments to explain the implementation.
+`;
+
+try {
+if (this._openai) {
+    const completion = await this._openai.chat.completions.create({
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: maxTokens
+    });
+    
+    const responseContent = completion.choices[0].message.content;
+    if (responseContent) {
+        // Extract code from the response
+        const codeMatch = responseContent.match(/```(?:\w+)?\n([\s\S]*?)\n```/) || [null, responseContent];
+        return codeMatch[1] ? codeMatch[1].trim() : responseContent.trim();
+    }
+}
+
+throw new Error('Failed to generate function code. API not initialized.');
+} catch (error) {
+console.error('Error calling AI API:', error);
+const errorMessage = error instanceof Error ? error.message : String(error);
+throw new Error(`Error calling AI API: ${errorMessage}`);
+}
+}
+
+/**
+* Get framework details based on framework ID
+*/
+private _getFrameworkDetails(framework: string): FrameworkInfo {
+const frameworks: Record<string, FrameworkInfo> = {
+// JavaScript/TypeScript
+'react': {
+    name: 'React',
+    language: 'JavaScript/TypeScript',
+    type: 'frontend',
+    dependencies: ['react', 'react-dom', 'react-scripts']
+},
+'vue': {
+    name: 'Vue.js',
+    language: 'JavaScript/TypeScript',
+    type: 'frontend',
+    dependencies: ['vue', 'vue-router', 'vuex']
+},
+'angular': {
+    name: 'Angular',
+    language: 'TypeScript',
+    type: 'frontend',
+    dependencies: ['@angular/core', '@angular/common', '@angular/router']
+},
+'express': {
+    name: 'Express.js',
+    language: 'JavaScript/TypeScript',
+    type: 'backend',
+    dependencies: ['express', 'body-parser', 'mongoose']
+},
+'next': {
+    name: 'Next.js',
+    language: 'JavaScript/TypeScript',
+    type: 'fullstack',
+    dependencies: ['next', 'react', 'react-dom']
+},
+
+// Python
+'python-native': {
+    name: 'Native Python',
+    language: 'Python',
+    type: 'script',
+    dependencies: ['pytest', 'black', 'mypy']
+},
+'fastapi': {
+    name: 'FastAPI',
+    language: 'Python',
+    type: 'backend',
+    dependencies: ['fastapi', 'uvicorn', 'pydantic']
+},
+'django': {
+    name: 'Django',
+    language: 'Python',
+    type: 'fullstack',
+    dependencies: ['django', 'djangorestframework', 'django-cors-headers']
+},
+'flask': {
+    name: 'Flask',
+    language: 'Python',
+    type: 'backend',
+    dependencies: ['flask', 'flask-sqlalchemy', 'flask-migrate']
+},
+
+// Infrastructure as Code
+'terraform': {
+    name: 'Terraform',
+    language: 'HCL',
+    type: 'infrastructure',
+    dependencies: []
+},
+'ansible': {
+    name: 'Ansible',
+    language: 'YAML',
+    type: 'configuration',
+    dependencies: []
+},
+
+// Database
+'sql-mysql': {
+    name: 'MySQL',
+    language: 'SQL',
+    type: 'database',
+    dependencies: []
+},
+'sql-postgres': {
+    name: 'PostgreSQL',
+    language: 'SQL',
+    type: 'database',
+    dependencies: []
+},
+'sql-sqlite': {
+    name: 'SQLite',
+    language: 'SQL',
+    type: 'database',
+    dependencies: []
+},
+
+// Shell
+'bash': {
+    name: 'Bash Script',
+    language: 'Bash',
+    type: 'script',
+    dependencies: []
+},
+
+// Java
+'spring': {
+    name: 'Spring Boot',
+    language: 'Java',
+    type: 'backend',
+    dependencies: ['spring-boot-starter-web', 'spring-boot-starter-data-jpa', 'spring-boot-starter-security']
+},
+'android': {
+    name: 'Android App',
+    language: 'Java/Kotlin',
+    type: 'mobile',
+    dependencies: ['androidx.core:core-ktx', 'androidx.appcompat:appcompat', 'com.google.android.material:material']
+},
+
+// C#
+'aspnet': {
+    name: 'ASP.NET Core',
+    language: 'C#',
+    type: 'backend',
+    dependencies: ['Microsoft.AspNetCore.App', 'Microsoft.EntityFrameworkCore', 'Newtonsoft.Json']
+},
+'wpf': {
+    name: 'WPF Desktop App',
+    language: 'C#',
+    type: 'desktop',
+    dependencies: ['Microsoft.Extensions.DependencyInjection', 'MaterialDesignThemes']
+},
+
+// Go
+'golang-web': {
+    name: 'Go Web Server',
+    language: 'Go',
+    type: 'backend',
+    dependencies: ['github.com/gin-gonic/gin', 'github.com/go-sql-driver/mysql', 'github.com/golang-jwt/jwt']
+},
+'golang-cli': {
+    name: 'Go CLI Application',
+    language: 'Go',
+    type: 'cli',
+    dependencies: ['github.com/spf13/cobra', 'github.com/spf13/viper', 'github.com/sirupsen/logrus']
+},
+
+// Ruby
+'rails': {
+    name: 'Ruby on Rails',
+    language: 'Ruby',
+    type: 'fullstack',
+    dependencies: ['rails', 'pg', 'devise']
+},
+
+// PHP
+'laravel': {
+    name: 'Laravel',
+    language: 'PHP',
+    type: 'fullstack',
+    dependencies: ['laravel/framework', 'laravel/sanctum', 'laravel/tinker']
+},
+
+// Rust
+'rust-web': {
+    name: 'Rust Web Service',
+    language: 'Rust',
+    type: 'backend',
+    dependencies: ['actix-web', 'tokio', 'serde']
+},
+'rust-cli': {
+    name: 'Rust CLI Tool',
+    language: 'Rust',
+    type: 'cli',
+    dependencies: ['clap', 'serde', 'tokio']
+}
+};
+
+return frameworks[framework] || {
+name: framework,
+language: 'Unknown',
+type: 'unknown',
+dependencies: []
+};
+}
+
+/**
+* Method to split large prompts into manageable chunks
+*/
+private async _generateLargerProject(description: string, framework: string): Promise<ProjectStructure> {
+// First, determine the project structure without full file content
+const structurePrompt = `
+Based on this description: "${description}"
+
+Generate a structure for a ${framework} application.
+Return ONLY a JSON array of file paths that would be included in this project.
+Example: ["package.json", "src/index.js", "src/components/App.js"]
+
+Do not include file content, just the paths.
+`;
+
+// Get the structure first
+const structureResponse = await this._callAI(structurePrompt, 2048);
+let filePaths: string[] = [];
+
+try {
+// Parse the response to get file paths
+const pathMatch = structureResponse.match(/\[([\s\S]*?)\]/);
+if (pathMatch) {
+    const pathJson = `[${pathMatch[1]}]`;
+    filePaths = JSON.parse(pathJson);
+}
+} catch (error) {
+console.error('Error parsing structure response:', error);
+throw new Error('Failed to generate project structure');
+}
+
+// Now generate content for each file separately
+const files: {path: string, content: string}[] = [];
+const frameworkDetails = this._getFrameworkDetails(framework);
+
+for (const filePath of filePaths) {
+const filePrompt = `
+Generate code for a ${filePath} file in a ${frameworkDetails.name} project.
+
+Project description: ${description}
+
+I need the complete content for this specific file. Focus only on this file.
+Context: This is part of a ${frameworkDetails.name} application written in ${frameworkDetails.language}.
+`;
+
+try {
+    const fileContent = await this._callAI(filePrompt, 2048);
+    
+    // Clean up the response to extract just the code
+    const codeMatch = fileContent.match(/```(?:\w+)?\n([\s\S]*?)\n```/) || [null, fileContent];
+    const cleanedContent = codeMatch[1] ? codeMatch[1].trim() : fileContent.trim();
+    
+    files.push({
+        path: filePath,
+        content: cleanedContent
+    });
+} catch (error) {
+    console.error(`Error generating content for ${filePath}:`, error);
+    files.push({
+        path: filePath,
+        content: `// Failed to generate content for this file: ${error}`
+    });
+}
+}
+
+return { files };
+}
+
+/**
+* Helper method for AI calls
+*/
+private async _callAI(prompt: string, maxTokens: number): Promise<string> {
+const config = vscode.workspace.getConfiguration('fintonlabs');
+const model = config.get<string>('model') || 'gpt-4-turbo';
+
+try {
+if (this._openai) {
+    const completion = await this._openai.chat.completions.create({
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: maxTokens
+    });
+    
+    return completion.choices[0].message.content || '';
+}
+
+throw new Error('OpenAI client not initialized');
+} catch (error) {
+console.error('Error calling AI API:', error);
+const errorMessage = error instanceof Error ? error.message : String(error);
+throw new Error(`Error calling AI API: ${errorMessage}`);
+}
+}
 }
 
 // Types
 export interface GenerationResult {
-    message: string;
-    files: string[];
+message: string;
+files: string[];
 }
 
 export interface ComponentGenerationResult {
-    filePath: string;
-    code: string;
+filePath: string;
+code: string;
 }
 
 export interface FunctionGenerationResult {
-    code: string;
+code: string;
 }
 
 export interface ProjectStructure {
-    files: {
-        path: string;
-        content: string;
-    }[];
+files: {
+path: string;
+content: string;
+}[];
 }
 
 export interface ProjectAnalysis {
-    projectType: string;
-    framework: string;
-    packageJson: any;
-    fileContents: Record<string, string>;
-    directoryStructure: string[];
+projectType: string;
+framework: string;
+packageJson: any;
+fileContents: Record<string, string>;
+directoryStructure: string[];
 }
 
 export interface UpdatePlan {
-    files: {
-        path: string;
-        action: 'create' | 'update' | 'delete';
-        content?: string;
-    }[];
+files: {
+path: string;
+action: 'create' | 'update' | 'delete';
+content?: string;
+}[];
 }
 
 interface FrameworkInfo {
-    name: string;
-    language: string;
-    type: string;
-    dependencies: string[];
+name: string;
+language: string;
+type: string;
+dependencies: string[];
 }
