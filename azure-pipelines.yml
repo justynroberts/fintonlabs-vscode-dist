@@ -1,21 +1,26 @@
-# Node.js
-# Build a general Node.js project with npm.
-# Add steps that analyze code, save build artifacts, deploy, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
-
 trigger:
-- main
+  branches:
+    include:
+      - main
+
+parameters:
+  - name: trigger_source
+    type: string
+    default: manual
+  - name: env
+    type: string
+    default: dev
+  - name: reason
+    type: string
+    default: none
 
 pool:
   vmImage: ubuntu-latest
 
 steps:
-- task: NodeTool@0
-  inputs:
-    versionSpec: '20.x'
-  displayName: 'Install Node.js'
-
-- script: |
-    npm install
-    npm run build
-  displayName: 'npm install and build'
+  - script: |
+      echo "👋 Hello from Azure DevOps!"
+      echo "Triggered via: ${{ parameters.trigger_source }}"
+      echo "Environment: ${{ parameters.env }}"
+      echo "Reason: ${{ parameters.reason }}"
+    displayName: "Print input parameters"
