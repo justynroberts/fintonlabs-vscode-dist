@@ -3,24 +3,12 @@ trigger:
     include:
       - main
 
-parameters:
-  - name: trigger_source
-    type: string
-    default: manual
-  - name: env
-    type: string
-    default: dev
-  - name: reason
-    type: string
-    default: none
-
 pool:
   vmImage: ubuntu-latest
 
 steps:
   - script: |
-      echo "👋 Hello from Azure DevOps!"
-      echo "Triggered via: ${{ parameters.trigger_source }}"
-      echo "Environment: ${{ parameters.env }}"
-      echo "Reason: ${{ parameters.reason }}"
-    displayName: "Print input parameters"
+      echo "✅ Hello from Azure DevOps!"
+      echo "This pipeline is designed to always succeed."
+      echo "Trigger time: $(Build.QueuedDate)"
+    displayName: "Success step"
